@@ -1,5 +1,6 @@
 import pickle
 import numpy as np
+import time
 
 from machines_p1 import P1
 from machines_p2 import P2
@@ -38,7 +39,7 @@ def is_board_full():
 def check_line(line):
     if 0 in line:
         return False  # Incomplete line
-    characteristics = np.array([pieces[piece_idx - 1] for piece_idx in line])
+    characteristics = np.array([pieces[piece_idx - 1] for piece_idx in line], dtype=object)
     for i in range(4):  # Check each characteristic (I/E, N/S, T/F, P/J)
         if len(set(characteristics[:, i])) == 1:  # All share the same characteristic
             return True
@@ -95,9 +96,11 @@ def piece_to_oct(piece):
     return str(p) if p >= 10 else '0' + str(p)
 
 
+
+
 # 시뮬레이션 시행회수
 t = 0
-while t < 1000000:
+while t < 100000000000:
 
     if flag=="select_piece" and not game_over:
 
@@ -145,15 +148,10 @@ while t < 1000000:
         if winner:
             #추가 코드(player 1이 이기면 1점 2가 이기면 -1)
 
-            if key in dic.keys():
-                t -= 1
             dic[key] = 1 if winner == 1 else -1
 
         elif is_board_full():
             
-            if key in dic.keys():
-                t -= 1
-                
             #추가 코드(무승부면 0점)
             dic[key] = 0
             
@@ -165,17 +163,22 @@ while t < 1000000:
 
         t += 1
 
+        if t % 100000 == 0:  # 10만 회마다 저장
+            print(t)
+            with open(f'tuning{t // 100000}.pickle', 'wb') as file:
+                pickle.dump(dic, file)
+            
+            dic.clear()
+    
+        time.sleep(0.0001)
+        print(t)
 
 
-#binary로 저장
-with open('tuning.pickle', 'wb') as file:
-    pickle.dump(dic, file)
+    '''
+    0312 형태로 key가 구성됨
 
+    03은 03번 piece를 선택했다는 뜻
+    12는 1,2위치에 배치했다는 뜻
 
-'''
-0312 형태로 key가 구성됨
+    '''
 
-03은 03번 piece를 선택했다는 뜻
-12는 1,2위치에 배치했다는 뜻
-
-'''
