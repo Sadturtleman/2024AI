@@ -5,7 +5,7 @@ from tqdm import tqdm
 dir_path = "/Users/yereum/Documents/인공지능/2024AI/pickle_files"
 merged_dict = {}
 
-for i in tqdm(range(1, 238), desc="Merging pickle files"):
+for i in tqdm(range(1, 489), desc="Merging pickle files"):
     file_path = os.path.join(dir_path, f"tuning{i}.pickle")
     with open(file_path, 'rb') as f:
         data = pickle.load(f)
