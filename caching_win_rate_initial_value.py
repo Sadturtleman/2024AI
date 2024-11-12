@@ -3,7 +3,7 @@ import pickle
 with open('pickle_files/merged_dict.pickle', 'rb') as file:
     data = pickle.load(file)
 
-dp = {}
+cache = {}
 
 for key, value in data.items():
     moves = [key[i:i+4] for i in range(0, len(key), 4)]
@@ -12,21 +12,21 @@ for key, value in data.items():
         piece = move[:2]
         position = move[2:]
         
-        if (i, piece, position) not in dp:
-            dp[(i, piece, position)] = [0, 0, 0, 0]
+        if (i, piece, position) not in cache:
+            cache[(i, piece, position)] = [0, 0, 0, 0]
         
         if i % 2 == 0: 
             if value == 1:
-                dp[(i, piece, position)][0] += 1 
-            dp[(i, piece, position)][1] += 1  
+                cache[(i, piece, position)][0] += 1 
+            cache[(i, piece, position)][1] += 1  
         else:  
             if value == -1:
-                dp[(i, piece, position)][2] += 1
-            dp[(i, piece, position)][3] += 1  
+                cache[(i, piece, position)][2] += 1
+            cache[(i, piece, position)][3] += 1  
 
 turn_win_rate = {}
 
-for (turn, piece, position), (p1_wins, p1_total, p2_wins, p2_total) in dp.items():
+for (turn, piece, position), (p1_wins, p1_total, p2_wins, p2_total) in cache.items():
     p1_win_rate = p1_wins / p1_total if p1_total > 0 else 0
     p2_win_rate = p2_wins / p2_total if p2_total > 0 else 0
 
