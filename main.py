@@ -165,7 +165,7 @@ while t < 100000000000:
 
         if t % 100000 == 0:  # 10만 회마다 저장
             print(t)
-            with open(f'tuning{t // 100000}.pickle', 'wb') as file:
+            with open(f'tuning{t // 100000 + 753}.pickle', 'wb') as file:
                 pickle.dump(dic, file)
             
             dic.clear()
