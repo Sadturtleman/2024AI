@@ -1,16 +1,22 @@
 import pandas as pd
 import networkx as nx
+import pygraphviz as pgv
 import matplotlib.pyplot as plt
 
 file_path = "tree_merged_1to20_table.csv"
 df = pd.read_csv(file_path)
 
+# 승리한 게임 배치가 최소 1인 데이터만 필터링
+df_filtered = df[df['Wins'] >= 1]
 
-df["Win Rate"] = df["Wins"] / df["Total Games"]
+# 트리 깊이 설정
+max_depth = 5
+df_filtered = df_filtered[df_filtered['Level'] <= max_depth]
+df_filtered["Win Rate"] = df_filtered["Wins"] / df_filtered["Total Games"]
 
 G = nx.DiGraph()
 
-for _, row in df.iterrows():
+for _, row in df_filtered.iterrows():
     log_parts = row["Play Log"].split() if pd.notna(row["Play Log"]) else []
     parent = " ".join(log_parts[:-1]) if len(log_parts) > 1 else "Root"
     current = row["Play Log"] if row["Play Log"] else "Root"
@@ -22,18 +28,16 @@ for _, row in df.iterrows():
     if parent != "Root" or current == "Root":
         G.add_edge(parent, current)
 
-pos = nx.spring_layout(G, seed=42) 
+pos = nx.nx_agraph.graphviz_layout(G, prog="dot")
 
 labels = nx.get_node_attributes(G, 'label')
 colors = [G.nodes[node]['win_rate'] for node in G.nodes]
-
-node_sizes = [1000 + G.nodes[node]['win_rate'] * 5000 for node in G.nodes]
-nx.draw(G, pos, with_labels=False, node_color=colors, cmap=plt.cm.coolwarm, node_size=node_sizes)
+node_sizes = [1000 + (min(5000, G.nodes[node]['win_rate'] * 5000)) for node in G.nodes]
 
 plt.figure(figsize=(15, 10))
 nx.draw(
     G, pos, with_labels=False, node_color=colors,
-    cmap=plt.cm.coolwarm, node_size=800, alpha=0.9, edge_color="gray"
+    cmap=plt.cm.coolwarm, node_size=node_sizes, alpha=0.9, edge_color="gray"
 )
 
 nx.draw_networkx_labels(G, pos, labels, font_size=8)
