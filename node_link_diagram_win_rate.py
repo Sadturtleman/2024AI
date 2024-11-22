@@ -7,10 +7,6 @@ output_file = "node_link_diagram_win_rate.png"
 
 df = pd.read_csv(file_path)
 
-required_columns = ['Level', 'Wins', 'Total Games', 'Play Log']
-if not all(col in df.columns for col in required_columns):
-    raise ValueError(f"CSV 파일에 다음 열이 필요합니다: {required_columns}")
-
 df_filtered = df[df['Wins'] >= 1]
 df_filtered = df_filtered[df_filtered['Level'] <= 3]
 df_filtered["Win_Rate"] = df_filtered.apply(
