@@ -1,7 +1,10 @@
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
-import multiprocessing
+from multiprocessing import set_start_method, cpu_count, Pool
+
+def get_pool_size():
+    return cpu_count()
 
 def split_games(df):
     games = []
@@ -9,7 +12,6 @@ def split_games(df):
     prev_level = -1
 
     for _, row in df.iterrows():
-    
         if row['Level'] < prev_level:
             if current_game:
                 games.append(pd.DataFrame(current_game))  
@@ -33,9 +35,9 @@ def create_graph_from_chunk(chunk):
         label = f"{current}\n({win_rate:.2%})"
 
         G.add_node(current, label=label, Win_Rate=win_rate)
-        if parent != "Root" or current == "Root":
+        if parent != current: 
             G.add_edge(parent, current)
-
+    
     return G
 
 def process_game_chunk(game_chunk):
@@ -46,14 +48,17 @@ def process_game_chunk(game_chunk):
     graph = create_graph_from_chunk(game_chunk)
     return graph
 
-
 def merge_graphs(graphs):
-   
     merged_graph = nx.DiGraph()
     for graph in graphs:
         merged_graph.add_nodes_from(graph.nodes(data=True))
         merged_graph.add_edges_from(graph.edges(data=True))
     return merged_graph
+
+
+def get_layout_choice():
+    
+    return 'spectral_layout'  
 
 def plot_graph(G, output_file):
     nodes_with_win_rate = [node for node in G.nodes if 'Win_Rate' in G.nodes[node]]
@@ -61,9 +66,16 @@ def plot_graph(G, output_file):
     colors = [G.nodes[node]['Win_Rate'] for node in nodes_with_win_rate]
     node_sizes = [1000 + min(5000, G.nodes[node]['Win_Rate'] * 5000) for node in nodes_with_win_rate]
 
-
-    pos = nx.spring_layout(G)
-
+    layout_choice = get_layout_choice()
+    
+    if layout_choice == 'spring_layout':
+        pos = nx.spring_layout(G)
+    elif layout_choice == 'spectral_layout':
+        pos = nx.spectral_layout(G)
+    elif layout_choice == 'kamada_kawai_layout':
+        pos = nx.kamada_kawai_layout(G)
+    else:
+        pos = nx.spring_layout(G) 
 
     plt.figure(figsize=(15, 10))
     vmin, vmax = 0, 1
@@ -83,6 +95,10 @@ def plot_graph(G, output_file):
 def main():
     file_path = "tree_merged_1to20_table.csv"
     df = pd.read_csv(file_path)
+    try:
+        set_start_method('spawn')
+    except RuntimeError:
+        pass
 
     games = split_games(df)
 
@@ -92,10 +108,12 @@ def main():
         for start in range(0, len(game), chunk_size):
             game_chunks.append(game.iloc[start:start + chunk_size])
 
-
-    pool = multiprocessing.Pool(processes=4) 
+   
+    pool_size = get_pool_size()
+    print(f"Using {pool_size} processes for parallel processing.")
+    
+    pool = Pool(processes=pool_size) 
     graphs = pool.map(process_game_chunk, game_chunks)
-
 
     merged_graph = merge_graphs(graphs)
 
