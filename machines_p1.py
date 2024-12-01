@@ -72,27 +72,25 @@ class P1():
         play_log = self.generate_play_log()
         if self.current_turn <= self.simulation_turns:  
             if play_log in self.hash_table:
-                best_child = self.hash_table[play_log]  
-                piece_hex = best_child
+                best_child_piece_hex = self.hash_table[play_log]  
                 try:
-                    piece_tuple = piece_hex_to_binary(piece_hex)
+                    piece_tuple = piece_hex_to_binary(best_child_piece_hex)
                     return piece_tuple
                 except ValueError:
-                    raise ValueError(f"Invalid piece hex value: {piece_hex}")
+                    raise ValueError(f"Invalid piece hex value: {best_child_piece_hex}")
         # return random.choice(self.available_pieces) 
         
     def place_piece(self, selected_piece):
         play_log = self.generate_play_log()
         if self.current_turn <= self.simulation_turns: 
             if play_log in self.hash_table:
-                best_child = self.hash_table[play_log]
-                place_hex = best_child
+                best_child_place_hex = self.hash_table[play_log]
                 try:
-                    place_tuple = place_hex_to_tuple(place_hex) 
+                    place_tuple = place_hex_to_tuple(best_child_place_hex) 
                     self.current_turn += 1 
                     return place_tuple
                 except ValueError:
-                    raise ValueError(f"Invalid place hex value: {place_hex}")
+                    raise ValueError(f"Invalid place hex value: {best_child_place_hex}")
 
         # 이후 minimax로 진행
         available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col] == 0]
