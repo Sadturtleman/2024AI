@@ -61,8 +61,12 @@ class P1:
         for row in range(4):
             for col in range(4):
                 if self.board[row][col] != 0:
-                    play_log.append(str(self.board[row][col] - 1))
-        return ' '.join(play_log)
+                    hex_value = piece_dict[f"{self.board[row][col] - 1:02}"]
+                    play_log.append(hex_value)
+        play_log_str = ' '.join(play_log)
+        print(f"Generated play_log (16진수): {play_log_str}")  # 디버깅용 출력
+        return play_log_str
+
 
     def select_best_child(self, play_log):
         best_win_rate = -1
