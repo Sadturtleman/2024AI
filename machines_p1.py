@@ -63,7 +63,7 @@ def binary_piece_tuple_to_hex(binary_tuple):
 class P1():
     _instance = None
 
-    def __new__(cls, *args, **kwargs):  # 싱글톤
+    def __new__(cls):  # 싱글톤
         if not cls._instance:
             cls._instance = super(P1, cls).__new__(cls)
         return cls._instance
