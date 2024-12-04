@@ -10,6 +10,7 @@ HASH_TABLE_PATH = "hash_table.msgpack.gz"
 global_hash_table = None
 
 play_log = []
+previous_place_log = []
 
 place_dict = {
     "00": "0", "01": "1", "02": "2", "03": "3",
@@ -78,28 +79,24 @@ class P1():
             self.simulation_turns = use_simulation_turns
             self.current_turn = 1
             self.play_log = []
+            self.previous_place_log = []
             self.initialized = True
     
     def generate_place_log(self):
-        current_place = [] 
-        for row in range(4):
-            for col in range(4):
-                if self.board[row][col] != 0:
-                    current_place.append((row, col))
-        if play_log:  
-            previous_state = list(map(place_hex_to_tuple, play_log))
-        else:
-            previous_state = []
+        # 현재 턴에서 기물이 이미 올라가 있는 위치만 뽑아서 current_place_log에 기록
+        current_place_log = [(row, col) for row in range(4) for col in range(4) 
+                                                if self.board[row][col] != 0]
 
-        s1 = set(current_place)
-        s2 = set(previous_state)  
+        s1 = set(current_place_log)
+        s2 = set(previous_place_log)  
         
-        diff = list(s1 - s2)
+        diff = list(s1 - s2)  # current place가 previous place보다 더 많이 차 있음.
         if diff:  # 차집합이 비어 있지 않으면
             place_str = ''.join([f"{x}{y}" for x, y in diff])  
-            hex_value = binary_place_tuple_to_hex(place_str)  
+            pair = diff[0] 
+            hex_value = binary_place_tuple_to_hex((pair[0], pair[1]))  
             if hex_value:
-                play_log.append(hex_value)
+                self.play_log.append(hex_value)
             else:
                 print(f"place_str에 맵핑되는 것이 없음.: {place_str}")
         else:
@@ -108,31 +105,37 @@ class P1():
         return list(s2 - s1)
     
     def select_piece(self):
-        play_log_str = ' '.join(map(str, play_log))
+        play_log_str = ' '.join(map(str, self.play_log))
 
         if play_log_str in self.hash_table:
-            best_child_piece_hex = self.hash_table[play_log_str]["best_child"]  
+            worst_child_piece_hex = self.hash_table[play_log_str]["worst_child"]  
             try:
-                piece_tuple = piece_hex_to_binary(best_child_piece_hex)
+                piece_tuple = piece_hex_to_binary(worst_child_piece_hex)
+                self.play_log.append(binary_piece_tuple_to_hex(piece_tuple))  # 상대방에게 골라준 worst 기물을 로그에 기록
                 return piece_tuple
             except ValueError:
-                raise ValueError(f"Invalid piece hex value: {best_child_piece_hex}")
+                raise ValueError(f"Invalid piece hex value: {worst_child_piece_hex}")
         else:
             print(f"해시 테이블에 해당 play_log가 없음: {play_log_str}.")
         # return random.choice(self.available_pieces) 
         
     def place_piece(self, selected_piece):
-        play_log.append(binary_piece_tuple_to_hex(selected_piece)) 
+        # P2가 놓은 위치만 아래 함수로 호출할 방법 생각 (조건문을 어떻게 써야 할까 turn 변수를 둘까)
         self.generate_place_log()
 
-        play_log_str = ' '.join(map(str, play_log))
+        self.play_log.append(binary_piece_tuple_to_hex(selected_piece)) # 상대방이 골라준 기물을 로그에 추가
+
+        play_log_str = " ".join(map(str, self.play_log))
+
+        print(f"[DEBUG] place_piece: play_log_str={play_log_str}")
+        print(f"[DEBUG] Hash table lookup result: {self.hash_table.get(play_log_str, 'Not Found')}")
 
         if play_log_str in self.hash_table:
             best_child_place_hex = self.hash_table[play_log_str]["best_child"]
             try:
                 place_tuple = place_hex_to_tuple(best_child_place_hex) 
                 if place_tuple:
-                    play_log.append(best_child_place_hex)
+                    self.play_log.append(best_child_place_hex)  # 상대방이 골라준 기물을 놓는 위치를 로그에 기록
                     self.current_turn += 1 
                     return place_tuple
                 else:
@@ -143,6 +146,13 @@ class P1():
                     return random.choice(available_locs)
             except ValueError:
                 raise ValueError(f"Invalid place hex value: {best_child_place_hex}")
+        
+        # 이전 턴에서 P1이 놓은 기물 위치까지 기록된 로그에서 위치 로그만 뽑아서 튜플로 변환
+        if self.play_log:  
+            self.previous_place_log = list(map(place_hex_to_tuple, self.play_log[1::2]))  # [start:end:stop]
+        else:
+            self.previous_place_log = []
+
 
         # 이후 minimax로 진행
 
