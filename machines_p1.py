@@ -26,6 +26,7 @@ piece_dict = {
     "12": "C", "13": "D", "14": "E", "15": "F"
 }
         
+
 def load_global_hash_table(file_path):
     global global_hash_table
     if global_hash_table is not None:
@@ -43,23 +44,28 @@ def load_global_hash_table(file_path):
     
     return global_hash_table
     
+
 def place_hex_to_tuple(hex_char):
     for key, value in place_dict.items():
         if value == hex_char:
             return tuple(map(int, key))
 
+
 def piece_hex_to_binary(hex_char):
     key = next(key for key, value in piece_dict.items() if value == hex_char)
     return tuple(int(bit) for bit in format(int(key), '04b'))
+
 
 def binary_place_tuple_to_hex(binary_tuple):
     hex_key = ''.join(map(str, binary_tuple))
     return place_dict[hex_key]
 
+
 def binary_piece_tuple_to_hex(binary_tuple):
     decimal_value = int(''.join(map(str, binary_tuple)), 2)
     hex_value = hex(decimal_value)[2:].upper() 
     return hex_value
+
 
 class P1():
     _instance = None
@@ -68,6 +74,7 @@ class P1():
         if not cls._instance:
             cls._instance = super(P1, cls).__new__(cls)
         return cls._instance
+
 
     def __init__(self, board, available_pieces, use_simulation_turns=4):
         if not hasattr(self, "initialized"):
@@ -82,6 +89,7 @@ class P1():
             self.previous_place_log = []
             self.initialized = True
     
+
     def generate_place_log(self):
         # 현재 턴에서 기물이 이미 올라가 있는 위치만 뽑아서 current_place_log에 기록
         current_place_log = [(row, col) for row in range(4) for col in range(4) 
@@ -104,6 +112,7 @@ class P1():
         
         return list(s2 - s1)
     
+
     def select_piece(self):
         play_log_str = ' '.join(map(str, self.play_log))
 
@@ -118,7 +127,8 @@ class P1():
         else:
             print(f"해시 테이블에 해당 play_log가 없음: {play_log_str}.")
         # return random.choice(self.available_pieces) 
-        
+
+
     def place_piece(self, selected_piece):
         # P2가 놓은 위치만 아래 함수로 호출할 방법 생각 (조건문을 어떻게 써야 할까 turn 변수를 둘까)
         self.generate_place_log()
@@ -186,6 +196,7 @@ class P1():
 
         return positions
 
+
     #특정 위치에서 플레이어에게 유리한지, 상대방에게 유리한지 평가.
     def evaluate_line_advantage(self, positions):
         advantage = {"P1": False, "P2": False}
@@ -202,6 +213,7 @@ class P1():
                     advantage["P2"] = True
         return advantage
 
+
     #주어진 기물이 3개의 같은 속성을 만족하는 라인을 완성할 수 있는 위치를 찾음.
     def find_completing_line(self, selected_piece):
         
@@ -217,6 +229,7 @@ class P1():
 
         return completing_positions
     
+
     #상대방의 승리를 막기 위해 최선의 방어 위치와 기물을 선택.
     def determine_best_defense(self):
         for piece in self.available_pieces:
@@ -230,6 +243,7 @@ class P1():
                         return {"piece": piece, "position": (row, col)}
         return None
     
+
     #특정 상태에서 상대방이 승리할 수 있는지 확인.
     def can_opponent_win(self, temp_board):
         for row, col in product(range(temp_board.shape[0]), range(temp_board.shape[1])):
@@ -240,6 +254,7 @@ class P1():
                     return True
         return False
 
+
     def check_win(self, board):
         def check_line(line):
             if 0 in line:
@@ -249,6 +264,7 @@ class P1():
                 if len(set(characteristics[:, i])) == 1:
                     return True
             return False
+
 
         # 가로, 세로, 대각선 확인
         for col in range(board.shape[1]):
