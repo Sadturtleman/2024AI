@@ -81,17 +81,17 @@ class P1():
             self.initialized = True
     
     def generate_place_log(self):
-        currentPlace = [] 
+        current_place = [] 
         for row in range(4):
             for col in range(4):
                 if self.board[row][col] != 0:
-                    currentPlace.append((row, col))
+                    current_place.append((row, col))
         if play_log:  
             previous_state = list(map(place_hex_to_tuple, play_log))
         else:
             previous_state = []
 
-        s1 = set(currentPlace)
+        s1 = set(current_place)
         s2 = set(previous_state)  
         
         diff = list(s1 - s2)
@@ -101,9 +101,9 @@ class P1():
             if hex_value:
                 play_log.append(hex_value)
             else:
-                print(f"Warning: No mapping found for place_str: {place_str}")
+                print(f"place_str에 맵핑되는 것이 없음.: {place_str}")
         else:
-            print("Warning: No difference between currentPlace and previous_state.")
+            print("current_place와 previous_state 간의 차집합이 비어있음.")
         
         return list(s2 - s1)
     
