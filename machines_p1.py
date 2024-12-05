@@ -5,8 +5,9 @@ import numpy as np
 import random
 import gzip
 import ast
+import tool
 
-HASH_TABLE_PATH = "hash_table.msgpack.gz"
+HASH_TABLE_PATH = "hash_table_less30_more70.msgpack.gz"
 
 global_hash_table = None
 
@@ -83,7 +84,26 @@ class P1():
             self.play_log = []
             self.previous_place_log = []
             self.initialized = True
-    
+
+
+    def get_piece_and_log(self, piece):
+        hex_piece = binary_piece_tuple_to_hex(piece)
+        self.play_log.append(hex_piece)
+
+        play_log_str = ' '.join(self.play_log)
+        print(f"[P1 DEBUG] place_piece: play_log_str={play_log_str}")
+        print(f"[P1 DEBUG] Hash table lookup result: {self.hash_table.get(play_log_str, 'Not Found')}")
+
+
+    def get_place_and_log(self, place):
+        hex_place = binary_place_tuple_to_hex(place)
+        self.play_log.append(hex_place)
+
+        play_log_str = ' '.join(self.play_log)
+        print(f"[P1 DEBUG] place_piece: play_log_str={play_log_str}")
+        print(f"[P1 DEBUG] Hash table lookup result: {self.hash_table.get(play_log_str, 'Not Found')}")
+
+
     def generate_place_log(self):
         # 현재 턴에서 기물이 이미 올라가 있는 위치만 뽑아서 current_place_log에 기록
         current_place_log = [(row, col) for row in range(4) for col in range(4) 
@@ -92,28 +112,19 @@ class P1():
         s1 = set(current_place_log)
         s2 = set(self.previous_place_log)          
         diff = list(s1 - s2)  # current place가 previous place보다 더 많이 차 있음.
-        print(f"[DEBUG] S1: s1={s1}")
-        print(f"[DEBUG] S2: s2={s2}")
-        print(f"[DEBUG] diff: diff={diff}")
+        print(f"[P1 DEBUG] S1: s1={s1}")
+        print(f"[P1 DEBUG] S2: s2={s2}")
+        print(f"[P1 DEBUG] diff: diff={diff}")
 
         if diff:  # 차집합이 비어 있지 않으면
-            place_str = ''.join([f"{x}{y}" for x, y in diff])  
             pair = diff[0] 
-            hex_value = binary_place_tuple_to_hex((pair[0], pair[1]))  
-            if hex_value:
-                self.play_log.append(hex_value)
-                play_log_str = " ".join(map(str, self.play_log))
-                print(f"[DEBUG] place_piece: play_log_str={play_log_str}")
-                print(f"[DEBUG] Hash table lookup result: {self.hash_table.get(play_log_str, 'Not Found')}")
-            else:
-                print(f"place_str에 맵핑되는 것이 없음.: {place_str}")
+            if pair not in self.previous_place_log: 
+                self.get_place_and_log(pair)
+            
         else:
             print("current_place와 previous_state 간의 차집합이 비어있음.")
             available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col] == 0]
-            self.play_log.append(binary_place_tuple_to_hex(random.choice(available_locs)))
-            play_log_str = ' '.join(map(str, self.play_log))
-            print(f"[DEBUG] place_piece: play_log_str={play_log_str}")
-            print(f"[DEBUG] Hash table lookup result: {self.hash_table.get(play_log_str, 'Not Found')}")
+            self.get_place_and_log(random.choice(available_locs))
 
         self.previous_place_log = current_place_log
         return list(s2 - s1)
@@ -128,25 +139,36 @@ class P1():
                 value = ast.literal_eval(value)  # 문자열을 딕셔너리로 변환
                 self.hash_table[key_to_check] = value  # 변환된 값 업데이트
             worst_child_piece_hex = self.hash_table.get(play_log_str).get("worst_child")  
-            try:
-                piece_tuple = piece_hex_to_binary(worst_child_piece_hex)
-                self.play_log.append(binary_piece_tuple_to_hex(piece_tuple))  # 상대방에게 골라준 worst 기물을 로그에 기록
+            
+            if worst_child_piece_hex is None:
+                available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
+                notcheckmateposition = tool.find_notcheckmate_piece(self.board, self.available_pieces, available_locs)
 
-                print(f"[DEBUG] place_piece: play_log_str={play_log_str}")
-                print(f"[DEBUG] Hash table lookup result: {self.hash_table.get(play_log_str, 'Not Found')}")
+                if bool(notcheckmateposition):
+                    self.get_piece_and_log(notcheckmateposition[0])
+                    return notcheckmateposition[0]
                 
-                return piece_tuple
-            except ValueError:
-                raise ValueError(f"Invalid piece hex value: {worst_child_piece_hex}")
+                random_piece = random.choice(self.available_pieces)
+                self.get_piece_and_log(random_piece)
+                return random_piece
+                   
+            else:
+                try:
+                    piece_tuple = piece_hex_to_binary(worst_child_piece_hex)
+                    self.get_piece_and_log(piece_tuple)
+                    return piece_tuple
+                except ValueError:
+                    raise ValueError(f"Invalid piece hex value: {worst_child_piece_hex}")
         else:
-            print(f"해시 테이블에 해당 play_log가 없음: {play_log_str}")
+            available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
+            notcheckmateposition = tool.find_notcheckmate_piece(self.board, self.available_pieces, available_locs)
 
+            if bool(notcheckmateposition):
+                self.get_piece_and_log(notcheckmateposition[0])
+                return notcheckmateposition[0]
+                
             random_piece = random.choice(self.available_pieces)
-
-            self.play_log.append(binary_piece_tuple_to_hex(random_piece)) 
-            print(f"[DEBUG] place_piece: play_log_str={play_log_str}")
-            print(f"[DEBUG] Hash table lookup result: {self.hash_table.get(play_log_str, 'Not Found')}")
-
+            self.get_piece_and_log(random_piece)
             return random_piece
         
     def place_piece(self, selected_piece):
@@ -157,154 +179,110 @@ class P1():
 
         self.play_log.append(binary_piece_tuple_to_hex(selected_piece)) # 상대방이 골라준 기물을 로그에 추가
         play_log_str = " ".join(map(str, self.play_log))
-        print(f"[DEBUG] place_piece: play_log_str={play_log_str}")
-        print(f"[DEBUG] Hash table lookup result: {self.hash_table.get(play_log_str, 'Not Found')}")
-
+        print(f"[P1 DEBUG] place_piece: play_log_str={play_log_str}")
+        print(f"[P1 DEBUG] Hash table lookup result: {self.hash_table.get(play_log_str, 'Not Found')}")
+        
+        play_log_str = ''.join(self.play_log)
+        
         if play_log_str in self.hash_table:
             value = self.hash_table.get(play_log_str)
             if isinstance(value, str):
                 value = ast.literal_eval(value)  # 문자열을 딕셔너리로 변환
                 self.hash_table[play_log_str] = value  # 변환된 값 업데이트
             best_child_place_hex = self.hash_table.get(play_log_str).get("best_child")
-            try:
-                place_tuple = place_hex_to_tuple(best_child_place_hex) 
-                if place_tuple:
-                    self.play_log.append(best_child_place_hex)  # 상대방이 골라준 기물을 놓는 위치를 로그에 기록
+            
+            if best_child_place_hex is None:
+                available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
 
-                    play_log_str = " ".join(map(str, self.play_log))
-                    print(f"[DEBUG] place_piece: play_log_str={play_log_str}")
-                    print(f"[DEBUG] Hash table lookup result: {self.hash_table.get(play_log_str, 'Not Found')}")
-                    
-                    # 이전 턴에서 P1이 놓은 기물 위치까지 기록된 로그에서 위치 로그만 뽑아서 튜플로 변환 
+                checkmate_position = tool.find_checkmate_place(self.board, selected_piece, available_locs)
+                if bool(checkmate_position):
+                    self.get_place_and_log(checkmate_position[0])
                     self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
-
                     self.current_turn += 1
-                    return place_tuple
-            except ValueError:
-                raise ValueError(f"Invalid place hex value: {best_child_place_hex}")
-        else:
-            # 해시 테이블 데이터 자체에 best child node가 None인 데이터가 있음.
-            # 그래서 아래처럼 else에 랜덤 place를 선택하는 코드를 써야 된다고 생각.
-            available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col] == 0]
-            random_place = random.choice(available_locs)
-            self.play_log.append(binary_place_tuple_to_hex(random_place))
-            
-            play_log_str = " ".join(map(str, self.play_log))
-            print(f"[DEBUG] place_piece: play_log_str={play_log_str}")
-            print(f"[DEBUG] Hash table lookup result: {self.hash_table.get(play_log_str, 'Not Found')}")
-            
-            # 이전 턴에서 P1이 놓은 기물 위치까지 기록된 로그에서 위치 로그만 뽑아서 튜플로 변환 
-            self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
+                    return checkmate_position[0]
 
-            self.current_turn += 1
-            return random_place
+                data = tool.find_three(self.board)
 
-        # 이후 minimax로 진행
+                for index, (r, c) in enumerate(available_locs):
+                    self.board[r][c] = self.pieces.index(selected_piece) + 1
+                    if tool.check_win(self.board):
+                        for temp in data:
+                            if temp[1][0] == r and temp[1][1] == c:
+                                num = tool.find_piece_by_point(self.board, self.available_pieces)[index]
 
-    # jy 수정 코드 반영
-    # 3개짜리 같은 속성을 가진 라인을 완성할 수 있는 위치를 찾음
-    def find_possible_line_positions(self):
-        positions = []
-        size = self.board.shape[0]
+                                if num % 2 == 0:
+                                    self.get_place_and_log((r, c))
+                                    self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
+                                    self.current_turn += 1
+                                    return (r, c)
+                                
+                                else:
+                                    available_locs[index] = (None, None)
 
-        for row in range(size):
-            if list(self.board[row, :]).count(0) == 1: 
-                empty_idx = list(self.board[row, :]).index(0)
-                attributes = [
-                    self.pieces[self.board[row, col] - 1] for col in range(size) if self.board[row, col] != 0
-                ]
-                for i in range(4):
-                    if len(set(attr[i] for attr in attributes)) == 1:  
-                        positions.append((row, empty_idx))
-                        break
+                    self.board[r][c] = 0
 
-        for col in range(size):
-            if list(self.board[:, col]).count(0) == 1:
-                empty_idx = list(self.board[:, col]).index(0)
-                attributes = [
-                    self.pieces[self.board[row, col] - 1] for row in range(size) if self.board[row, col] != 0
-                ]
-                for i in range(4):
-                    if len(set(attr[i] for attr in attributes)) == 1:
-                        positions.append((empty_idx, col))
-                        break
+                # N이 3개 있을 때 S를 받은 경우 S가 짝수개 있으면 N을 막는 위치
+                # N이 3개 있을 때 S를 받은 경우 S가 홀수개 있으면 N을 여는 위치
+                # print(available_locs)
 
-        return positions
+                random_place = random.choice([item for item in available_locs if None not in item])
+                self.get_place_and_log(random_place)
 
-    #특정 위치에서 플레이어에게 유리한지, 상대방에게 유리한지 평가.
-    def evaluate_line_advantage(self, positions):
-        advantage = {"P1": False, "P2": False}
-        for pos in positions:
-            row, col = pos
-            temp_board = self.board.copy()
-            temp_board[row][col] = self.pieces.index(self.available_pieces[0]) + 1
-            if self.check_win(temp_board):
-                advantage["P1"] = True
+                # 이전 턴에서 P1이 놓은 기물 위치까지 기록된 로그에서 위치 로그만 뽑아서 튜플로 변환 
+                self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
+                self.current_turn += 1
+                return random_place
             else:
-                opponent_piece = random.choice(self.available_pieces)
-                temp_board[row][col] = self.pieces.index(opponent_piece) + 1
-                if self.check_win(temp_board):
-                    advantage["P2"] = True
-        return advantage
+                try:
+                    place_tuple = place_hex_to_tuple(best_child_place_hex) 
+                    if place_tuple:
+                        self.get_place_and_log(place_tuple)
 
-    #주어진 기물이 3개의 같은 속성을 만족하는 라인을 완성할 수 있는 위치를 찾음.
-    def find_completing_line(self, selected_piece):
-        
-        completing_positions = []
-        size = self.board.shape[0]
+                        # 이전 턴에서 P1이 놓은 기물 위치까지 기록된 로그에서 위치 로그만 뽑아서 튜플로 변환 
+                        self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
 
-        for row, col in product(range(size), range(size)):
-            if self.board[row, col] == 0:
-                temp_board = self.board.copy()
-                temp_board[row, col] = self.pieces.index(selected_piece) + 1
-                if self.check_win(temp_board):
-                    completing_positions.append((row, col))
+                        self.current_turn += 1
+                        return place_tuple
+                except ValueError:
+                    raise ValueError(f"Invalid place hex value: {best_child_place_hex}")
+        else:
+            available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
 
-        return completing_positions
-    
-    #상대방의 승리를 막기 위해 최선의 방어 위치와 기물을 선택.
-    def determine_best_defense(self):
-        for piece in self.available_pieces:
-            for row, col in product(range(self.board.shape[0]), range(self.board.shape[1])):
-                if self.board[row, col] == 0: 
-                    temp_board = self.board.copy()
-                    temp_board[row, col] = self.pieces.index(piece) + 1
+            checkmate_position = tool.find_checkmate_place(self.board, selected_piece, available_locs)
+            if bool(checkmate_position):
+                self.get_place_and_log(checkmate_position[0])
+                self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
+                self.current_turn += 1
+                return checkmate_position[0]
 
-                    opponent = 2  
-                    if self.can_opponent_win(temp_board, opponent):
-                        return {"piece": piece, "position": (row, col)}
-        return None
-    
-    #특정 상태에서 상대방이 승리할 수 있는지 확인.
-    def can_opponent_win(self, temp_board):
-        for row, col in product(range(temp_board.shape[0]), range(temp_board.shape[1])):
-            if temp_board[row, col] == 0:
-                future_board = temp_board.copy()
-                future_board[row, col] = self.pieces.index(self.available_pieces[0]) + 1
-                if self.check_win(future_board):
-                    return True
-        return False
+            data = tool.find_three(self.board)
 
-    def check_win(self, board):
-        def check_line(line):
-            if 0 in line:
-                return False
-            characteristics = np.array([self.pieces[piece_idx - 1] for piece_idx in line if piece_idx > 0])
-            for i in range(4):
-                if len(set(characteristics[:, i])) == 1:
-                    return True
-            return False
+            for index, (r, c) in enumerate(available_locs):
+                self.board[r][c] = self.pieces.index(selected_piece) + 1
+                if tool.check_win(self.board):
+                    for temp in data:
+                        if temp[1][0] == r and temp[1][1] == c:
+                            num = tool.find_piece_by_point(self.board, self.available_pieces)[index]
 
-        # 가로, 세로, 대각선 확인
-        for col in range(board.shape[1]):
-            if check_line(board[:, col]):
-                return True
-        for row in range(board.shape[0]):
-            if check_line(board[row, :]):
-                return True
-        if check_line([board[i, i] for i in range(board.shape[0])]) or check_line(
-            [board[i, board.shape[0] - i - 1] for i in range(board.shape[0])]
-        ):
-            return True
+                            if num % 2 == 0:
+                                self.get_place_and_log((r, c))
+                                self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
+                                self.current_turn += 1
+                                return (r, c)
+                            else:
+                                available_locs[index] = (None, None)
 
-        return False
+                self.board[r][c] = 0
+
+            # N이 3개 있을 때 S를 받은 경우 S가 짝수개 있으면 N을 막는 위치
+            # N이 3개 있을 때 S를 받은 경우 S가 홀수개 있으면 N을 여는 위치
+            # print(available_locs)
+            
+        random_place = random.choice([item for item in available_locs if None not in item])
+        self.get_place_and_log(random_place)
+
+        # 이전 턴에서 P1이 놓은 기물 위치까지 기록된 로그에서 위치 로그만 뽑아서 튜플로 변환 
+        self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
+        self.current_turn += 1
+        return random_place
+        # 이후 minimax로 진행
