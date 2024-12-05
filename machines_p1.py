@@ -4,6 +4,7 @@ import os
 import numpy as np
 import random
 import gzip
+import ast
 
 HASH_TABLE_PATH = "hash_table.msgpack.gz"
 
@@ -34,7 +35,8 @@ def load_global_hash_table(file_path):
     if os.path.exists(file_path):
         try:
             with gzip.open(file_path, 'rb') as f:
-                global_hash_table = pickle.load(f)
+                hash_table_df = pickle.load(f)
+                global_hash_table = dict(zip(hash_table_df['Key'], hash_table_df['Value']))
                 print(f"해시 테이블 로드 완료: {len(global_hash_table)}개의 부모 노드")
         except Exception as e:
             raise Exception(f"해시 테이블 파일을 읽는 중 오류 발생: {e}")
@@ -120,7 +122,12 @@ class P1():
         play_log_str = ' '.join(map(str, self.play_log))
 
         if play_log_str in self.hash_table:
-            worst_child_piece_hex = self.hash_table[play_log_str]["worst_child"]  
+            key_to_check = play_log_str
+            value = self.hash_table.get(key_to_check)
+            if isinstance(value, str):
+                value = ast.literal_eval(value)  # 문자열을 딕셔너리로 변환
+                self.hash_table[key_to_check] = value  # 변환된 값 업데이트
+            worst_child_piece_hex = self.hash_table.get(play_log_str).get("worst_child")  
             try:
                 piece_tuple = piece_hex_to_binary(worst_child_piece_hex)
                 self.play_log.append(binary_piece_tuple_to_hex(piece_tuple))  # 상대방에게 골라준 worst 기물을 로그에 기록
@@ -154,7 +161,11 @@ class P1():
         print(f"[DEBUG] Hash table lookup result: {self.hash_table.get(play_log_str, 'Not Found')}")
 
         if play_log_str in self.hash_table:
-            best_child_place_hex = self.hash_table[play_log_str]["best_child"]
+            value = self.hash_table.get(play_log_str)
+            if isinstance(value, str):
+                value = ast.literal_eval(value)  # 문자열을 딕셔너리로 변환
+                self.hash_table[play_log_str] = value  # 변환된 값 업데이트
+            best_child_place_hex = self.hash_table.get(play_log_str).get("best_child")
             try:
                 place_tuple = place_hex_to_tuple(best_child_place_hex) 
                 if place_tuple:
