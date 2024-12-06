@@ -177,7 +177,7 @@ class P2():
         
     def place_piece(self, selected_piece):
         # P2가 놓은 위치만 아래 함수로 호출할 방법 생각 
-        if (self.current_turn % 2 == 0):
+        if (self.current_turn % 2 == 1):
             self.generate_place_log()
             self.current_turn += 1
 
