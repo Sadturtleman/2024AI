@@ -1,7 +1,9 @@
 import numpy as np
+import sys
 
 
 pieces = [(i, j, k, l) for i in range(2) for j in range(2) for k in range(2) for l in range(2)]  # All 16 pieces
+sys.setrecursionlimit(10 ** 6)
 
 def check_win(board):
     def check_line(line):
@@ -170,9 +172,11 @@ def disputelist(ls : list) -> list:
     
     return []
 
-def find_piece_by_point(board : list[list], availpiece : list) -> list[tuple]:
+def find_opponent(board : list[list], availpiece : list) -> list[tuple]:
 
     data = find_three(board)
+    if not data:
+        return []
     ans = list()
 
     for point in data:
@@ -193,21 +197,36 @@ def find_power_otherattr(point : tuple, availpiece):
     
     return answer
 
-def minimax(board, availpiece, availplace, select_piece = None, alpha = -9999, beta = 9999, flag = 1, type = 'piece') -> list:
-    #P1(flag == 1) win -> 1 else -1
-     
-    if check_win(board):
-        if flag == 1:
-            return None, 1
-        else:
-            return None, -1
+def evaluate(board, availpiece, flag):
 
-    if type == 'piece':
-        return explore_move_piece(board, availpiece, availplace, alpha, beta, flag)
-    else:
-        return explore_move_place(board, availpiece, availplace, select_piece, alpha, beta, flag)
+    if check_win(board):
+        return 1000 if flag == 1 else -1000
     
-def explore_move_piece(board, availpiece, availplace, alpha, beta, flag):
+    ls = find_opponent(board, availpiece)
+    score = 0
+
+    for point in ls:
+        if point % 2 == 1:
+            score += (8 - point) * -10 if flag == 1 else (8 - point) * 10
+        else:
+            score += (8 - point) * 10 if flag == 1 else (8 - point) * -10
+    
+    return score
+
+def minimax(board, availpiece, availplace, select_piece = None, alpha = -9999, beta = 9999, flag = 1, type = 'piece', depth = 6) -> list:
+    #P1(flag == 1) win -> 1 else -1
+         
+    if depth == 0 or check_win(board):
+        return None, evaluate(board, availpiece, flag)
+    
+    if type == 'piece':
+        return explore_move_piece(board, availpiece, availplace, alpha, beta, flag, depth)
+    else:
+        return explore_move_place(board, availpiece, availplace, select_piece, alpha, beta, flag, depth)
+    
+
+
+def explore_move_piece(board, availpiece, availplace, alpha, beta, flag, depth):
     value = -9999 if flag == 1 else 9999
     ans = None
     for piece in availpiece:
@@ -225,7 +244,8 @@ def explore_move_piece(board, availpiece, availplace, alpha, beta, flag):
                 alpha,
                 beta,
                 flag = 3 - flag,
-                type = 'place'
+                type = 'place',
+                depth = depth - 1
             )
             
             board[row][col] = 0
@@ -249,7 +269,7 @@ def explore_move_piece(board, availpiece, availplace, alpha, beta, flag):
     
     return ans, value
 
-def explore_move_place(board, availpiece, availplace, piece, alpha, beta, flag):
+def explore_move_place(board, availpiece, availplace, piece, alpha, beta, flag, depth):
     value = -9999 if flag == 1 else 9999
     ans = None
 
@@ -267,7 +287,8 @@ def explore_move_place(board, availpiece, availplace, piece, alpha, beta, flag):
             alpha,
             beta,
             flag = flag,
-            type = 'piece'
+            type = 'piece',
+            depth = depth - 1
         )
 
         board[row][col] = 0
@@ -292,4 +313,3 @@ def explore_move_place(board, availpiece, availplace, piece, alpha, beta, flag):
         return ans, value
     
     return ans, value
-
