@@ -5,8 +5,19 @@ import random
 import gzip
 import ast
 import tool
+import zstandard as zstd
+import msgpack
+import pandas as pd
 
-HASH_TABLE_PATH = "hash_table_less30_more70.msgpack.gz"
+# csv_to_gzip
+# HASH_TABLE_PATH = "hash_table_less30_more70.msgpack.gz"
+
+# csv_to_zstd
+# HASH_TABLE_PATH = 'hash_table_less30_more70.pickle.zst'
+HASH_TABLE_PATH = 'hash_table_less30_more70_short.pickle.zst'
+
+# csv_to_parquet
+# HASH_TABLE_PATH = 'hash_table_less30_more70.parquet'
 
 NUMBER = 11
 
@@ -36,10 +47,27 @@ def load_global_hash_table(file_path):
 
     if os.path.exists(file_path):
         try:
-            with gzip.open(file_path, 'rb') as f:
-                hash_table_df = pickle.load(f)
+            # Sol 1) csv_to_gzip (306.3 MB, 로딩: 32.3초)
+            # with gzip.open(file_path, 'rb') as f:
+            #     hash_table_df = pickle.load(f)
+            #     global_hash_table = dict(zip(hash_table_df['Key'], hash_table_df['Value']))
+            #     print(f"해시 테이블 로드 완료: {len(global_hash_table)}개의 부모 노드")
+
+            # Sol 2) csv_to_zstd (192.7 MB, 로딩: 33.2 초)
+            # Sol 2-1) csv_to_zstd (short 버전) (192.1 MB, 로딩: 32.6 초)
+            with open(file_path, 'rb') as f:
+                decompressor = zstd.ZstdDecompressor()
+                decompressed_data = decompressor.decompress(f.read())
+                hash_table_df = pickle.loads(decompressed_data)
                 global_hash_table = dict(zip(hash_table_df['Key'], hash_table_df['Value']))
                 print(f"해시 테이블 로드 완료: {len(global_hash_table)}개의 부모 노드")
+
+            # Sol 3) csv_to_parquet (296 MB, 로딩: 59.3초)
+            # hash_table_df = pd.read_parquet(file_path, engine='pyarrow')
+
+            # global_hash_table = dict(zip(hash_table_df['Key'], hash_table_df['Value']))
+            # print(f"해시 테이블 로드 완료: {len(global_hash_table)}개의 부모 노드")
+        
         except Exception as e:
             raise Exception(f"해시 테이블 파일을 읽는 중 오류 발생: {e}")
     else:
@@ -153,7 +181,7 @@ class P1():
                 if isinstance(value, str):
                     value = ast.literal_eval(value)  # 문자열을 딕셔너리로 변환
                     self.hash_table[key_to_check] = value  # 변환된 값 업데이트
-                worst_child_piece_hex = self.hash_table.get(play_log_str).get("worst_child")  
+                worst_child_piece_hex = self.hash_table.get(play_log_str).get("wc")  # worst_child
                 
                 if worst_child_piece_hex is None:
                     available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
@@ -207,7 +235,7 @@ class P1():
                 if isinstance(value, str):
                     value = ast.literal_eval(value)  # 문자열을 딕셔너리로 변환
                     self.hash_table[play_log_str] = value  # 변환된 값 업데이트
-                best_child_place_hex = self.hash_table.get(play_log_str).get("best_child")
+                best_child_place_hex = self.hash_table.get(play_log_str).get("bc")  # best_child
                 
                 if best_child_place_hex is None:
                     available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]

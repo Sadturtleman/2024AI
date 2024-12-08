@@ -2,7 +2,8 @@ import pickle
 import csv
 
 input_csv = "finaltree.csv"
-output_hash = "hash_table.pkl"
+# output_hash = "hash_table_less30_more70.pkl"
+output_hash = "hash_table_less30_more70_short.pkl"
 
 max_turns = 8
 
@@ -25,33 +26,33 @@ def create_hash_table_from_tree(input_csv, max_turns):
     with open(input_csv, 'r') as f:
         reader = csv.DictReader(f)
         for row in reader:
-            level = int(row['Level'])
+            level = int(row['Level'])  # Level
             if level > max_turns:
                 continue
 
-            play_log = row['Play Log'].strip().split()
+            play_log = row['Play Log'].strip().split()  # Play Log
             if len(play_log) < 2:
                 continue
 
             parent_node = " ".join(play_log[:-1])
             current_node = play_log[-1]
 
-            wins = int(row['Wins'])
-            total_games = int(row['Total Games'])
+            wins = int(row['Wins'])  # Wins
+            total_games = int(row['Total Games'])  # Total Games
             win_rate = wins / total_games if total_games > 0 else 0
 
-            # 수정한 부분
+            # best_child (bc), best_win_rate(bwr), worst_child(wc), worst_win_rate(wwr)
             if parent_node not in hash_table:
-                hash_table[parent_node] = {"best_child": None, "best_win_rate": -1,
-                                           "worst_child": None, "worst_win_rate": 2}
+                hash_table[parent_node] = {"bc": None, "bwr": -1,
+                                           "wc": None, "wwr": 2}
 
-            if win_rate >= 0.7 and win_rate > hash_table[parent_node]["best_win_rate"]:
-                hash_table[parent_node]["best_child"] = current_node
-                hash_table[parent_node]["best_win_rate"] = win_rate
+            if win_rate >= 0.7 and win_rate > hash_table[parent_node]["bwr"]:
+                hash_table[parent_node]["bc"] = current_node
+                hash_table[parent_node]["bwr"] = round(win_rate, 4)
 
-            if win_rate <= 0.3 and win_rate < hash_table[parent_node]["worst_win_rate"]:
-                hash_table[parent_node]["worst_child"] = current_node
-                hash_table[parent_node]["worst_win_rate"] = win_rate
+            if win_rate <= 0.3 and win_rate < hash_table[parent_node]["wwr"]:
+                hash_table[parent_node]["wc"] = current_node
+                hash_table[parent_node]["wwr"] = round(win_rate, 4)
 
     return hash_table
 
