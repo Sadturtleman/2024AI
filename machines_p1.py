@@ -7,17 +7,7 @@ import tool
 import zstandard as zstd
 import pandas as pd
 
-# csv_to_gzip
-# HASH_TABLE_PATH = "hash_table_less30_more70.msgpack.gz"
-
-# csv_to_zstd
-# HASH_TABLE_PATH = 'hash_table_less30_more70.pickle.zst'
-# HASH_TABLE_PATH = 'hash_table_less30_more70_short.pickle.zst'
 HASH_TABLE_PATH = 'hash_table_less45_more55_short_asymmetric_lv8.pickle.zst'
-# HASH_TABLE_PATH = 'hash_table_less45_more55_short_asymmetric_lv8.pickle.zst'
-
-# csv_to_parquet
-# HASH_TABLE_PATH = 'hash_table_less30_more70.parquet'
 
 NUMBER = 13
 
