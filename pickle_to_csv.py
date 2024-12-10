@@ -1,10 +1,7 @@
 import pandas as pd
 
-# pickle_file = 'hash_table_less30_more70.pkl'  # pickle 파일 이름
-# csv_file = 'hash_table_less30_more70.csv'   # 출력할 csv 파일 이름
-
-pickle_file = 'hash_table_less30_more70_short.pkl'  # pickle 파일 이름
-csv_file = 'hash_table_less30_more70_short.csv'   # 출력할 csv 파일 이름
+pickle_file = 'hash_table_less45_more55_short_asymmetric_lv8.pkl'  # pickle 파일 이름
+csv_file = 'hash_table_less45_more55_short_asymmetric_lv8.csv'   # 출력할 csv 파일 이름
 
 try:
     df = pd.read_pickle(pickle_file)

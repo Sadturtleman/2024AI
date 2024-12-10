@@ -2,11 +2,8 @@ import pickle
 import zstandard as zstd
 import pandas as pd
 
-# csv_file = 'hash_table_less30_more70.csv'
-# msgpack_file = 'hash_table_less30_more70.pickle.zst'
-
-csv_file = 'hash_table_less30_more70_short.csv'
-msgpack_file = 'hash_table_less30_more70_short.pickle.zst'
+csv_file = 'hash_table_less45_more55_short_asymmetric_lv8.csv'
+msgpack_file = 'hash_table_less45_more55_short_asymmetric_lv8.pickle.zst'
 
 # CSV 읽기
 df = pd.read_csv(csv_file)
