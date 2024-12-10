@@ -2,11 +2,9 @@ import pickle
 from itertools import product
 import os
 import random
-import gzip
 import ast
 import tool
 import zstandard as zstd
-import msgpack
 import pandas as pd
 
 # csv_to_gzip
@@ -14,12 +12,14 @@ import pandas as pd
 
 # csv_to_zstd
 # HASH_TABLE_PATH = 'hash_table_less30_more70.pickle.zst'
-HASH_TABLE_PATH = 'hash_table_less30_more70_short.pickle.zst'
+# HASH_TABLE_PATH = 'hash_table_less30_more70_short.pickle.zst'
+HASH_TABLE_PATH = 'hash_table_less45_more55_short_asymmetric_lv8.pickle.zst'
+# HASH_TABLE_PATH = 'hash_table_less45_more55_short_asymmetric_lv8.pickle.zst'
 
 # csv_to_parquet
 # HASH_TABLE_PATH = 'hash_table_less30_more70.parquet'
 
-NUMBER = 11
+NUMBER = 13
 
 global_hash_table = None
 
@@ -39,6 +39,13 @@ piece_dict = {
     "08": "8", "09": "9", "10": "A", "11": "B",
     "12": "C", "13": "D", "14": "E", "15": "F"
 }
+
+opposite_piece_map = {
+    "0": "F", "1": "E", "2": "D", "3": "C", 
+    "4": "B", "5": "A", "6": "9", "7": "8", 
+    "8": "7", "9": "6", "A": "5", "B": "4", 
+    "C": "3", "D": "2", "E": "1", "F": "0"
+}
         
 def load_global_hash_table(file_path):
     global global_hash_table
@@ -47,27 +54,13 @@ def load_global_hash_table(file_path):
 
     if os.path.exists(file_path):
         try:
-            # Sol 1) csv_to_gzip (306.3 MB, 로딩: 32.3초)
-            # with gzip.open(file_path, 'rb') as f:
-            #     hash_table_df = pickle.load(f)
-            #     global_hash_table = dict(zip(hash_table_df['Key'], hash_table_df['Value']))
-            #     print(f"해시 테이블 로드 완료: {len(global_hash_table)}개의 부모 노드")
-
-            # Sol 2) csv_to_zstd (192.7 MB, 로딩: 33.2 초)
-            # Sol 2-1) csv_to_zstd (short 버전) (192.1 MB, 로딩: 32.6 초)
+            # csv_to_zstd
             with open(file_path, 'rb') as f:
                 decompressor = zstd.ZstdDecompressor()
                 decompressed_data = decompressor.decompress(f.read())
                 hash_table_df = pickle.loads(decompressed_data)
                 global_hash_table = dict(zip(hash_table_df['Key'], hash_table_df['Value']))
                 print(f"해시 테이블 로드 완료: {len(global_hash_table)}개의 부모 노드")
-
-            # Sol 3) csv_to_parquet (296 MB, 로딩: 59.3초)
-            # hash_table_df = pd.read_parquet(file_path, engine='pyarrow')
-
-            # global_hash_table = dict(zip(hash_table_df['Key'], hash_table_df['Value']))
-            # print(f"해시 테이블 로드 완료: {len(global_hash_table)}개의 부모 노드")
-        
         except Exception as e:
             raise Exception(f"해시 테이블 파일을 읽는 중 오류 발생: {e}")
     else:
@@ -106,7 +99,8 @@ class P1():
             self.pieces = [(i, j, k, l) for i in range(2) for j in range(2) for k in range(2) for l in range(2)]  
             self.board = board  
             self.available_pieces = available_pieces          
-            self.hash_table = load_global_hash_table(HASH_TABLE_PATH)
+            # self.hash_table = load_global_hash_table(HASH_TABLE_PATH)
+            self.hash_table = hash_table
             
             self.simulation_turns = use_simulation_turns
             self.current_turn = 1
@@ -114,14 +108,41 @@ class P1():
             self.previous_place_log = []
             self.initialized = True
 
+    def convert_to_opposite_and_sort(self, parent_node):
+        parent_node = parent_node.split()
+        remaining = parent_node[-1:] if len(parent_node) % 2 != 0 else []  # parent_node 구성 요소가 홀수 개일 때
+
+        pieces_positions = [(opposite_piece_map[piece], place) for piece, place 
+                            in zip(parent_node[::2], parent_node[1::2])]
+
+        sorted_opposite_pieces_positions = sorted(pieces_positions, key=lambda x: x[0])
+        sorted_opposite_node = " ".join(
+            [" ".join(pair) for pair in sorted_opposite_pieces_positions] + remaining
+        )
+        return sorted_opposite_node
+
+    def sort_parent_node_by_piece(self, parent_node):
+        parent_node = parent_node.split()
+        remaining = [] 
+        if len(parent_node) % 2 != 0:  # parent_node 구성 요소가 홀수 개일 때
+            remaining = [parent_node.pop()]  # 마지막 요소를 저장
+
+        # parent_node 를 piece-place 쌍으로 분리
+        pieces_positions = [(parent_node[i], parent_node[i + 1]) for i in range(0, len(parent_node), 2)]
+        # piece 기준으로 sorting
+        sorted_pieces_positions = sorted(pieces_positions, key=lambda x: x[0])
+        # sorting 된 결과를 다시 문자열로 변환
+        sorted_node = " ".join([" ".join(pair) for pair in sorted_pieces_positions] + remaining)
+        return sorted_node
 
     def get_piece_and_log(self, piece):
         hex_piece = binary_piece_tuple_to_hex(piece)
         self.play_log.append(hex_piece)
 
         play_log_str = ' '.join(self.play_log)
+        sorted_play_log_str = self.sort_parent_node_by_piece(play_log_str)
         print(f"[P1 DEBUG] select_piece: play_log_str={play_log_str}")
-        print(f"[P1 DEBUG] Hash table lookup result: {self.hash_table.get(play_log_str, 'Not Found')}")
+        print(f"[P1 DEBUG] Hash table lookup result: {self.hash_table.get(sorted_play_log_str, 'Not Found')}")
 
 
     def get_place_and_log(self, place):
@@ -129,8 +150,9 @@ class P1():
         self.play_log.append(hex_place)
 
         play_log_str = ' '.join(self.play_log)
+        sorted_play_log_str = self.sort_parent_node_by_piece(play_log_str)
         print(f"[P1 DEBUG] place_piece: play_log_str={play_log_str}")
-        print(f"[P1 DEBUG] Hash table lookup result: {self.hash_table.get(play_log_str, 'Not Found')}")
+        print(f"[P1 DEBUG] Hash table lookup result: {self.hash_table.get(sorted_play_log_str, 'Not Found')}")
 
 
     def generate_place_log(self):
@@ -161,27 +183,19 @@ class P1():
     
     def select_piece(self):
         play_log_str = ' '.join(map(str, self.play_log))
+        sorted_play_log_str = self.sort_parent_node_by_piece(play_log_str)
+        opposite_sorted_play_log_str = self.convert_to_opposite_and_sort(play_log_str)
         available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
                 
         notcheckmatepiece = tool.find_notcheckmate_piece(self.board, self.available_pieces, available_locs)
-
-        if bool(notcheckmatepiece):
-            # self.available_pieces = notcheckmatepiece
-            print(f"[P1 DEBUG] notcheckmatepiece: {notcheckmatepiece}")
-            print(f"[P1 DEBUG] self.available_pieces: {self.available_pieces}")
-
-            random_piece = random.choice(self.available_pieces)
-            self.get_piece_and_log(random_piece)
-            return random_piece
         
         if len(available_locs) >= NUMBER:
-            if play_log_str in self.hash_table:
-                key_to_check = play_log_str
-                value = self.hash_table.get(key_to_check)
+            if sorted_play_log_str in self.hash_table:
+                value = self.hash_table.get(sorted_play_log_str)
                 if isinstance(value, str):
                     value = ast.literal_eval(value)  # 문자열을 딕셔너리로 변환
-                    self.hash_table[key_to_check] = value  # 변환된 값 업데이트
-                worst_child_piece_hex = self.hash_table.get(play_log_str).get("wc")  # worst_child
+                    self.hash_table[sorted_play_log_str] = value  # 변환된 값 업데이트
+                worst_child_piece_hex = self.hash_table.get(sorted_play_log_str).get("wc")  # worst_child
                 
                 if worst_child_piece_hex is None:
                     available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
@@ -196,6 +210,30 @@ class P1():
                         return piece_tuple
                     except ValueError:
                         raise ValueError(f"Invalid piece hex value: {worst_child_piece_hex}")
+            elif opposite_sorted_play_log_str in self.hash_table:
+                value = self.hash_table.get(opposite_sorted_play_log_str)
+                if isinstance(value, str):
+                    value = ast.literal_eval(value)  # 문자열을 딕셔너리로 변환
+                    self.hash_table[opposite_sorted_play_log_str] = value  # 변환된 값 업데이트
+                worst_child_piece_hex = self.hash_table.get(opposite_sorted_play_log_str).get("wc")  # worst_child
+                
+                if worst_child_piece_hex is None:
+                    available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
+
+                    random_piece = random.choice(notcheckmatepiece)
+                    self.get_piece_and_log(random_piece)
+                    return random_piece
+                else:
+                    try:
+                        piece_tuple = piece_hex_to_binary(worst_child_piece_hex)
+                        self.get_piece_and_log(piece_tuple)
+                        return piece_tuple
+                    except ValueError:
+                        raise ValueError(f"Invalid piece hex value: {worst_child_piece_hex}")
+            else:
+                    random_piece = random.choice(notcheckmatepiece)
+                    self.get_piece_and_log(random_piece)
+                    return random_piece
         # len(available_locs) < NUMBER (Min-Max)
         else:
             available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
@@ -220,6 +258,8 @@ class P1():
         self.get_piece_and_log(selected_piece)
 
         play_log_str = ''.join(self.play_log)
+        sorted_play_log_str = self.sort_parent_node_by_piece(play_log_str)
+        opposite_sorted_play_log_str = self.convert_to_opposite_and_sort(play_log_str)
         available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
 
         checkmate_position = tool.find_checkmate_place(self.board, selected_piece, available_locs)
@@ -230,12 +270,42 @@ class P1():
             return checkmate_position[0]
         
         if len(available_locs) >= NUMBER:
-            if play_log_str in self.hash_table:
-                value = self.hash_table.get(play_log_str)
+            if sorted_play_log_str in self.hash_table:
+                value = self.hash_table.get(sorted_play_log_str)
                 if isinstance(value, str):
                     value = ast.literal_eval(value)  # 문자열을 딕셔너리로 변환
-                    self.hash_table[play_log_str] = value  # 변환된 값 업데이트
-                best_child_place_hex = self.hash_table.get(play_log_str).get("bc")  # best_child
+                    self.hash_table[sorted_play_log_str] = value  # 변환된 값 업데이트
+                best_child_place_hex = self.hash_table.get(sorted_play_log_str).get("bc")  # best_child
+                
+                if best_child_place_hex is None:
+                    available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
+
+                    random_place = random.choice([item for item in available_locs if None not in item])
+                    self.get_place_and_log(random_place)
+
+                    # 이전 턴에서 P1이 놓은 기물 위치까지 기록된 로그에서 위치 로그만 뽑아서 튜플로 변환 
+                    self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
+                    self.current_turn += 1
+                    return random_place
+                else:
+                    try:
+                        place_tuple = place_hex_to_tuple(best_child_place_hex) 
+                        if place_tuple:
+                            self.get_place_and_log(place_tuple)
+
+                            # 이전 턴에서 P1이 놓은 기물 위치까지 기록된 로그에서 위치 로그만 뽑아서 튜플로 변환 
+                            self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
+
+                            self.current_turn += 1
+                            return place_tuple
+                    except ValueError:
+                        raise ValueError(f"Invalid place hex value: {best_child_place_hex}")
+            elif opposite_sorted_play_log_str in self.hash_table:
+                value = self.hash_table.get(opposite_sorted_play_log_str)
+                if isinstance(value, str):
+                    value = ast.literal_eval(value)  # 문자열을 딕셔너리로 변환
+                    self.hash_table[opposite_sorted_play_log_str] = value  # 변환된 값 업데이트
+                best_child_place_hex = self.hash_table.get(opposite_sorted_play_log_str).get("bc")  # best_child
                 
                 if best_child_place_hex is None:
                     available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
@@ -280,3 +350,7 @@ class P1():
         self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
         self.current_turn += 1
         return random_place
+
+print("게임에 필요한 해시 테이블 로드 중입니다. 로드 완료 메시지가 나올 때까지 잠시 기다려주세요.")
+hash_table = load_global_hash_table(HASH_TABLE_PATH)
+print("헤시 테이블 로그가 완료되었습니다. 게임 시작!")

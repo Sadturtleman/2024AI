@@ -1,14 +1,34 @@
 import pickle
-import csv
-from itertools import permutations
+import pandas as pd
+import gc
 
-input_csv = "finaltree.csv"
-output_hash = "hash_table_less30_more70_short_asymmetric_lv6.pkl"
+input_csv = "finaltree_lv8.csv"
+output_hash = "hash_table_less45_more55_short_asymmetric_lv8.pkl"
+max_turns = 9
+batch_size = 10000  # 일정 개수마다 저장 및 해제
 
-max_turns = 6
+append_count = 0  # 해시 테이블에 추가된 데이터 개수
+skipped_count = 0  # 해시 테이블에 추가되지 않고 skip 된 데이터 개수
 
-append_count = 0  # hash table에 추가된 데이터 개수
-skipped_count = 0  # hash table에 추가되지 않고 skip 된 데이터 개수
+opposite_piece_map = {
+    "0": "F", "1": "E", "2": "D", "3": "C", 
+    "4": "B", "5": "A", "6": "9", "7": "8", 
+    "8": "7", "9": "6", "A": "5", "B": "4", 
+    "C": "3", "D": "2", "E": "1", "F": "0"
+}
+
+def convert_to_opposite_and_sort(parent_node):
+    parent_node = parent_node.split()
+    remaining = parent_node[-1:] if len(parent_node) % 2 != 0 else []  # parent_node 구성 요소가 홀수 개일 때
+
+    pieces_positions = [(opposite_piece_map[piece], place) for piece, place 
+                        in zip(parent_node[::2], parent_node[1::2])]
+
+    sorted_opposite_pieces_positions = sorted(pieces_positions, key=lambda x: x[0])
+    sorted_opposite_node = " ".join(
+        [" ".join(pair) for pair in sorted_opposite_pieces_positions] + remaining
+    )
+    return sorted_opposite_node
 
 def sort_parent_node_by_piece(parent_node):
     parent_node = parent_node.split()
@@ -24,59 +44,100 @@ def sort_parent_node_by_piece(parent_node):
     sorted_node = " ".join([" ".join(pair) for pair in sorted_pieces_positions] + remaining)
     return sorted_node
 
-def create_hash_table_from_tree(input_csv, max_turns):
+def handle_missing_values(df):
+    # 각 열의 결측값 처리
+    df['Level'] = df['Level'].fillna(0).astype(int)  # Level 열은 0으로 채우고 정수형 변환
+    df['Wins'] = df['Wins'].fillna(0).astype(int)  # Wins 열은 0으로 채움
+    df['Total Games'] = df['Total Games'].fillna(0).astype(int)  # Total Games 열은 0으로 채움
+    df['Play Log'] = df['Play Log'].fillna("").astype(str)  # Play Log는 빈 문자열로 채움
+    return df
+
+def update_hash_table(hash_table, sorted_parent_node, current_node, win_rate):
     global append_count, skipped_count
+    if sorted_parent_node not in hash_table:
+        # 새로운 노드 추가
+        hash_table[sorted_parent_node] = {"bc": None, "bwr": -1, "wc": None, "wwr": 2}
+        append_count += 1
+    else:
+        skipped_count += 1
+    # 승률에 따라 업데이트
+    if win_rate > 0.55 and win_rate > hash_table[sorted_parent_node]["bwr"]:
+        hash_table[sorted_parent_node]["bc"] = current_node
+        hash_table[sorted_parent_node]["bwr"] = round(win_rate, 4)
+
+    if win_rate <= 0.45 and win_rate < hash_table[sorted_parent_node]["wwr"]:
+        hash_table[sorted_parent_node]["wc"] = current_node
+        hash_table[sorted_parent_node]["wwr"] = round(win_rate, 4)
+
+def create_hash_table_from_tree(input_csv, max_turns, batch_size):
+    global skipped_count
     hash_table = {}
+    batch_counter = 0
 
-    with open(input_csv, 'r') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            level = int(row['Level'])  # Level
-            if level > max_turns:
-                continue
+    # CSV 파일을 판다스로 읽어오기
+    df = pd.read_csv(input_csv)
+    print("CSV 로드 완료")
 
-            play_log = row['Play Log'].strip().split()  # Play Log
-            if len(play_log) < 2:
-                continue
+    # 결측값 처리
+    df = handle_missing_values(df)
+    print("결측값 처리 완료")
+    
+    for _, row in df.iterrows():
+        level = int(row['Level'])
+        if level > max_turns:
+            continue
 
-            parent_node = " ".join(play_log[:-1])
-            current_node = play_log[-1]
+        play_log = row['Play Log'].strip().split()
+        if len(play_log) < 2:
+            continue
 
-            # 승률 정보
-            wins = int(row['Wins'])  # Wins
-            total_games = int(row['Total Games'])  # Total Games
-            win_rate = wins / total_games if total_games > 0 else 0
+        parent_node = " ".join(play_log[:-1])
+        current_node = play_log[-1]
 
-            sorted_parent_node = sort_parent_node_by_piece(parent_node)
+        # 승률 정보 계산
+        wins = int(row['Wins'])
+        total_games = int(row['Total Games'])
+        win_rate = wins / total_games if total_games > 0 else 0
 
-            # 해시 테이블에 sorted_parent_node가 없다면 새로 추가
-            if sorted_parent_node not in hash_table:
-                hash_table[sorted_parent_node] = {"bc": None, "bwr": -1, "wc": None, "wwr": 2}
-                print(f"Append new parent node: {sorted_parent_node} -> Current node: {current_node} ( Win rate: {win_rate:.4f} )")
-                append_count = append_count + 1
-            # 해시 테이블에 sorted_parent_node가 이미 있다면 Skip 
-            else:
-                print(f"******** Skipped Parent node: {parent_node} -> Current node: {current_node} ( Win rate: {win_rate:.4f} )")
-                skipped_count = skipped_count + 1
-                continue
+        sorted_parent_node = sort_parent_node_by_piece(parent_node)
+        sorted_opposite_node = convert_to_opposite_and_sort(sorted_parent_node)
+        
+        if sorted_opposite_node in hash_table:
+            skipped_count += 1
+            continue
+        
+        # 해시 테이블 업데이트
+        update_hash_table(hash_table, sorted_parent_node, current_node, win_rate)
+  
+        batch_counter += 1
 
-            # 해시 테이블에 데이터 저장
-            if win_rate >= 0.7 and win_rate > hash_table[sorted_parent_node]["bwr"]:
-                hash_table[sorted_parent_node]["bc"] = current_node
-                hash_table[sorted_parent_node]["bwr"] = round(win_rate, 4)
+        # 일정 개수마다 해시 테이블 저장 및 메모리 해제
+        if batch_counter >= batch_size:
+            save_partial_hash_table(hash_table, output_hash)
+            hash_table.clear()
+            gc.collect()
+            batch_counter = 0
+            print(f"Batch 저장 완료. Append count: {append_count}, Skipped count: {skipped_count}")
 
-            if win_rate <= 0.3 and win_rate < hash_table[sorted_parent_node]["wwr"]:
-                hash_table[sorted_parent_node]["wc"] = current_node
-                hash_table[sorted_parent_node]["wwr"] = round(win_rate, 4)
+    # 마지막 남은 데이터를 저장
+    if hash_table:
+        save_partial_hash_table(hash_table, output_hash)
 
-    return hash_table
+def save_partial_hash_table(hash_table, output_hash):
+    try:
+        with open(output_hash, 'ab') as f:
+            pickle.dump(hash_table, f)
+        print(f"Partial hash table saved. Current size: {len(hash_table)}")
+    except Exception as e:
+        print(f"Error saving hash table: {e}")
 
-hash_table = create_hash_table_from_tree(input_csv, max_turns)
+# 해시 테이블 생성
+create_hash_table_from_tree(input_csv, max_turns, batch_size)
 
-with open(output_hash, 'wb') as f:
-    pickle.dump(hash_table, f)
+# 메모리 해제
+gc.collect()
 
-print(f"해시 테이블 생성 완료: {len(hash_table)}개의 부모 노드")
-print(f"해시 테이블 저장 완료: {output_hash}")
+print(f"해시 테이블 생성 완료")
+print(f"최종 해시 테이블 저장 완료: {output_hash}")
 print(f"Append count: {append_count}")
 print(f"Skipped count: {skipped_count}")
