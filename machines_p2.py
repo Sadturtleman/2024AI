@@ -1,17 +1,15 @@
 import pickle
 from itertools import product
 import os
-import numpy as np
 import random
-import gzip
 import ast
 import tool
+import zstandard as zstd
+import pandas as pd
 
+HASH_TABLE_PATH = 'hash_table_less45_more55_short_asymmetric_lv8.pickle.zst'
 
-## Player 2는 로그 순서 로직도 다시 수정해야 함.
-
-
-HASH_TABLE_PATH = "hash_table_less30_more70.msgpack.gz"
+NUMBER = 13
 
 global_hash_table = None
 
@@ -31,6 +29,13 @@ piece_dict = {
     "08": "8", "09": "9", "10": "A", "11": "B",
     "12": "C", "13": "D", "14": "E", "15": "F"
 }
+
+opposite_piece_map = {
+    "0": "F", "1": "E", "2": "D", "3": "C", 
+    "4": "B", "5": "A", "6": "9", "7": "8", 
+    "8": "7", "9": "6", "A": "5", "B": "4", 
+    "C": "3", "D": "2", "E": "1", "F": "0"
+}
         
 def load_global_hash_table(file_path):
     global global_hash_table
@@ -39,8 +44,11 @@ def load_global_hash_table(file_path):
 
     if os.path.exists(file_path):
         try:
-            with gzip.open(file_path, 'rb') as f:
-                hash_table_df = pickle.load(f)
+            # csv_to_zstd
+            with open(file_path, 'rb') as f:
+                decompressor = zstd.ZstdDecompressor()
+                decompressed_data = decompressor.decompress(f.read())
+                hash_table_df = pickle.loads(decompressed_data)
                 global_hash_table = dict(zip(hash_table_df['Key'], hash_table_df['Value']))
                 print(f"해시 테이블 로드 완료: {len(global_hash_table)}개의 부모 노드")
         except Exception as e:
@@ -81,7 +89,8 @@ class P2():
             self.pieces = [(i, j, k, l) for i in range(2) for j in range(2) for k in range(2) for l in range(2)]  
             self.board = board  
             self.available_pieces = available_pieces          
-            self.hash_table = load_global_hash_table(HASH_TABLE_PATH)
+            # self.hash_table = load_global_hash_table(HASH_TABLE_PATH)
+            self.hash_table = hash_table
             
             self.simulation_turns = use_simulation_turns
             self.current_turn = 1
@@ -89,14 +98,41 @@ class P2():
             self.previous_place_log = []
             self.initialized = True
 
+    def convert_to_opposite_and_sort(self, parent_node):
+        parent_node = parent_node.split()
+        remaining = parent_node[-1:] if len(parent_node) % 2 != 0 else []  # parent_node 구성 요소가 홀수 개일 때
+
+        pieces_positions = [(opposite_piece_map[piece], place) for piece, place 
+                            in zip(parent_node[::2], parent_node[1::2])]
+
+        sorted_opposite_pieces_positions = sorted(pieces_positions, key=lambda x: x[0])
+        sorted_opposite_node = " ".join(
+            [" ".join(pair) for pair in sorted_opposite_pieces_positions] + remaining
+        )
+        return sorted_opposite_node
+
+    def sort_parent_node_by_piece(self, parent_node):
+        parent_node = parent_node.split()
+        remaining = [] 
+        if len(parent_node) % 2 != 0:  # parent_node 구성 요소가 홀수 개일 때
+            remaining = [parent_node.pop()]  # 마지막 요소를 저장
+
+        # parent_node 를 piece-place 쌍으로 분리
+        pieces_positions = [(parent_node[i], parent_node[i + 1]) for i in range(0, len(parent_node), 2)]
+        # piece 기준으로 sorting
+        sorted_pieces_positions = sorted(pieces_positions, key=lambda x: x[0])
+        # sorting 된 결과를 다시 문자열로 변환
+        sorted_node = " ".join([" ".join(pair) for pair in sorted_pieces_positions] + remaining)
+        return sorted_node
 
     def get_piece_and_log(self, piece):
         hex_piece = binary_piece_tuple_to_hex(piece)
         self.play_log.append(hex_piece)
 
         play_log_str = ' '.join(self.play_log)
-        print(f"[P2 DEBUG] place_piece: play_log_str={play_log_str}")
-        print(f"[P2 DEBUG] Hash table lookup result: {self.hash_table.get(play_log_str, 'Not Found')}")
+        sorted_play_log_str = self.sort_parent_node_by_piece(play_log_str)
+        print(f"[P2 DEBUG] select_piece: play_log_str={play_log_str}")
+        print(f"[P2 DEBUG] Hash table lookup result: {self.hash_table.get(sorted_play_log_str, 'Not Found')}")
 
 
     def get_place_and_log(self, place):
@@ -104,8 +140,9 @@ class P2():
         self.play_log.append(hex_place)
 
         play_log_str = ' '.join(self.play_log)
+        sorted_play_log_str = self.sort_parent_node_by_piece(play_log_str)
         print(f"[P2 DEBUG] place_piece: play_log_str={play_log_str}")
-        print(f"[P2 DEBUG] Hash table lookup result: {self.hash_table.get(play_log_str, 'Not Found')}")
+        print(f"[P2 DEBUG] Hash table lookup result: {self.hash_table.get(sorted_play_log_str, 'Not Found')}")
 
 
     def generate_place_log(self):
@@ -128,52 +165,82 @@ class P2():
         else:
             print("current_place와 previous_state 간의 차집합이 비어있음.")
             available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col] == 0]
-            self.get_place_and_log(random.choice(available_locs))
+            random_place = random.choice(available_locs)
+            self.get_place_and_log(random_place)
 
         self.previous_place_log = current_place_log
         return list(s2 - s1)
     
     def select_piece(self):
         play_log_str = ' '.join(map(str, self.play_log))
-
-        if play_log_str in self.hash_table:
-            key_to_check = play_log_str
-            value = self.hash_table.get(key_to_check)
-            if isinstance(value, str):
-                value = ast.literal_eval(value)  # 문자열을 딕셔너리로 변환
-                self.hash_table[key_to_check] = value  # 변환된 값 업데이트
-            worst_child_piece_hex = self.hash_table.get(play_log_str).get("worst_child")  
-            
-            if worst_child_piece_hex is None:
-                available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
-                notcheckmateposition = tool.find_notcheckmate_piece(self.board, self.available_pieces, available_locs)
-
-                if bool(notcheckmateposition):
-                    self.get_piece_and_log(notcheckmateposition[0])
-                    return notcheckmateposition[0]
+        sorted_play_log_str = self.sort_parent_node_by_piece(play_log_str)
+        opposite_sorted_play_log_str = self.convert_to_opposite_and_sort(play_log_str)
+        available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
                 
-                random_piece = random.choice(self.available_pieces)
-                self.get_piece_and_log(random_piece)
-                return random_piece
-                   
+        notcheckmatepiece = tool.find_notcheckmate_piece(self.board, self.available_pieces, available_locs)
+        
+        if len(available_locs) >= NUMBER:
+            if sorted_play_log_str in self.hash_table:
+                value = self.hash_table.get(sorted_play_log_str)
+                if isinstance(value, str):
+                    value = ast.literal_eval(value)  # 문자열을 딕셔너리로 변환
+                    self.hash_table[sorted_play_log_str] = value  # 변환된 값 업데이트
+                worst_child_piece_hex = self.hash_table.get(sorted_play_log_str).get("wc")  # worst_child
+                
+                if worst_child_piece_hex is None:
+                    available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
+
+                    random_piece = random.choice(notcheckmatepiece)
+                    self.get_piece_and_log(random_piece)
+                    return random_piece
+                else:
+                    try:
+                        piece_tuple = piece_hex_to_binary(worst_child_piece_hex)
+                        self.get_piece_and_log(piece_tuple)
+                        return piece_tuple
+                    except ValueError:
+                        raise ValueError(f"Invalid piece hex value: {worst_child_piece_hex}")
+            elif opposite_sorted_play_log_str in self.hash_table:
+                value = self.hash_table.get(opposite_sorted_play_log_str)
+                if isinstance(value, str):
+                    value = ast.literal_eval(value)  # 문자열을 딕셔너리로 변환
+                    self.hash_table[opposite_sorted_play_log_str] = value  # 변환된 값 업데이트
+                worst_child_piece_hex = self.hash_table.get(opposite_sorted_play_log_str).get("wc")  # worst_child
+                
+                if worst_child_piece_hex is None:
+                    available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
+
+                    random_piece = random.choice(notcheckmatepiece)
+                    self.get_piece_and_log(random_piece)
+                    return random_piece
+                else:
+                    try:
+                        piece_tuple = piece_hex_to_binary(worst_child_piece_hex)
+                        self.get_piece_and_log(piece_tuple)
+                        return piece_tuple
+                    except ValueError:
+                        raise ValueError(f"Invalid piece hex value: {worst_child_piece_hex}")
             else:
-                try:
-                    piece_tuple = piece_hex_to_binary(worst_child_piece_hex)
-                    self.get_piece_and_log(piece_tuple)
-                    return piece_tuple
-                except ValueError:
-                    raise ValueError(f"Invalid piece hex value: {worst_child_piece_hex}")
+                    random_piece = random.choice(notcheckmatepiece)
+                    self.get_piece_and_log(random_piece)
+                    return random_piece
+        # len(available_locs) < NUMBER (Min-Max)
         else:
             available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
-            notcheckmateposition = tool.find_notcheckmate_piece(self.board, self.available_pieces, available_locs)
+            
+            print("*** minmax select 수행.")
+            piece, _ = tool.minimax(self.board, self.available_pieces, available_locs)
 
-            if bool(notcheckmateposition):
-                self.get_piece_and_log(notcheckmateposition[0])
-                return notcheckmateposition[0]
-                
-            random_piece = random.choice(self.available_pieces)
-            self.get_piece_and_log(random_piece)
-            return random_piece
+            if piece is None:
+                if bool(notcheckmatepiece):
+                    random_piece = random.choice(notcheckmatepiece)
+                else:
+                    random_piece = random.choice(self.available_pieces)
+                self.get_piece_and_log(random_piece)
+                return random_piece
+
+            self.get_piece_and_log(piece)
+            return piece 
         
     def place_piece(self, selected_piece):
         # P2가 놓은 위치만 아래 함수로 호출할 방법 생각 
@@ -181,112 +248,102 @@ class P2():
             self.generate_place_log()
             self.current_turn += 1
 
-        self.play_log.append(binary_piece_tuple_to_hex(selected_piece)) # 상대방이 골라준 기물을 로그에 추가
-        play_log_str = " ".join(map(str, self.play_log))
-        print(f"[P2 DEBUG] place_piece: play_log_str={play_log_str}")
-        print(f"[P2 DEBUG] Hash table lookup result: {self.hash_table.get(play_log_str, 'Not Found')}")
-        
-        play_log_str = ''.join(self.play_log)
-        
-        if play_log_str in self.hash_table:
-            value = self.hash_table.get(play_log_str)
-            if isinstance(value, str):
-                value = ast.literal_eval(value)  # 문자열을 딕셔너리로 변환
-                self.hash_table[play_log_str] = value  # 변환된 값 업데이트
-            best_child_place_hex = self.hash_table.get(play_log_str).get("best_child")
-            
-            if best_child_place_hex is None:
-                available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
+        self.get_piece_and_log(selected_piece)
 
-                checkmate_position = tool.find_checkmate_place(self.board, selected_piece, available_locs)
-                if bool(checkmate_position):
-                    self.get_place_and_log(checkmate_position[0])
+        play_log_str = ''.join(self.play_log)
+        sorted_play_log_str = self.sort_parent_node_by_piece(play_log_str)
+        opposite_sorted_play_log_str = self.convert_to_opposite_and_sort(play_log_str)
+        available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
+
+        checkmate_position = tool.find_checkmate_place(self.board, selected_piece, available_locs)
+        if bool(checkmate_position):
+            self.get_place_and_log(checkmate_position[0])
+            self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
+            self.current_turn += 1
+            return checkmate_position[0]
+        
+        if len(available_locs) >= NUMBER:
+            if sorted_play_log_str in self.hash_table:
+                value = self.hash_table.get(sorted_play_log_str)
+                if isinstance(value, str):
+                    value = ast.literal_eval(value)  # 문자열을 딕셔너리로 변환
+                    self.hash_table[sorted_play_log_str] = value  # 변환된 값 업데이트
+                best_child_place_hex = self.hash_table.get(sorted_play_log_str).get("bc")  # best_child
+                
+                if best_child_place_hex is None:
+                    available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
+
+                    random_place = random.choice([item for item in available_locs if None not in item])
+                    self.get_place_and_log(random_place)
+
+                    # 이전 턴에서 P2이 놓은 기물 위치까지 기록된 로그에서 위치 로그만 뽑아서 튜플로 변환 
                     self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
                     self.current_turn += 1
-                    return checkmate_position[0]
+                    return random_place
+                else:
+                    try:
+                        place_tuple = place_hex_to_tuple(best_child_place_hex) 
+                        if place_tuple:
+                            self.get_place_and_log(place_tuple)
 
-                data = tool.find_three(self.board)
+                            # 이전 턴에서 P2이 놓은 기물 위치까지 기록된 로그에서 위치 로그만 뽑아서 튜플로 변환 
+                            self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
 
-                for index, (r, c) in enumerate(available_locs):
-                    self.board[r][c] = self.pieces.index(selected_piece) + 1
-                    if tool.check_win(self.board):
-                        for temp in data:
-                            if temp[1][0] == r and temp[1][1] == c:
-                                num = tool.find_piece_by_point(self.board, self.available_pieces)[index]
+                            self.current_turn += 1
+                            return place_tuple
+                    except ValueError:
+                        raise ValueError(f"Invalid place hex value: {best_child_place_hex}")
+            elif opposite_sorted_play_log_str in self.hash_table:
+                value = self.hash_table.get(opposite_sorted_play_log_str)
+                if isinstance(value, str):
+                    value = ast.literal_eval(value)  # 문자열을 딕셔너리로 변환
+                    self.hash_table[opposite_sorted_play_log_str] = value  # 변환된 값 업데이트
+                best_child_place_hex = self.hash_table.get(opposite_sorted_play_log_str).get("bc")  # best_child
+                
+                if best_child_place_hex is None:
+                    available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
 
-                                if num % 2 == 0:
-                                    self.get_place_and_log((r, c))
-                                    self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
-                                    self.current_turn += 1
-                                    return (r, c)
-                                
-                                else:
-                                    available_locs[index] = (None, None)
+                    random_place = random.choice([item for item in available_locs if None not in item])
+                    self.get_place_and_log(random_place)
 
-                    self.board[r][c] = 0
+                    # 이전 턴에서 P2이 놓은 기물 위치까지 기록된 로그에서 위치 로그만 뽑아서 튜플로 변환 
+                    self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
+                    self.current_turn += 1
+                    return random_place
+                else:
+                    try:
+                        place_tuple = place_hex_to_tuple(best_child_place_hex) 
+                        if place_tuple:
+                            self.get_place_and_log(place_tuple)
 
-                # N이 3개 있을 때 S를 받은 경우 S가 짝수개 있으면 N을 막는 위치
-                # N이 3개 있을 때 S를 받은 경우 S가 홀수개 있으면 N을 여는 위치
-                # print(available_locs)
+                            # 이전 턴에서 P2이 놓은 기물 위치까지 기록된 로그에서 위치 로그만 뽑아서 튜플로 변환 
+                            self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
 
-                random_place = random.choice([item for item in available_locs if None not in item])
-                self.get_place_and_log(random_place)
-
-                # 이전 턴에서 P1이 놓은 기물 위치까지 기록된 로그에서 위치 로그만 뽑아서 튜플로 변환 
-                self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
-                self.current_turn += 1
-                return random_place
-            else:
-                try:
-                    place_tuple = place_hex_to_tuple(best_child_place_hex) 
-                    if place_tuple:
-                        self.get_place_and_log(place_tuple)
-
-                        # 이전 턴에서 P1이 놓은 기물 위치까지 기록된 로그에서 위치 로그만 뽑아서 튜플로 변환 
-                        self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
-
-                        self.current_turn += 1
-                        return place_tuple
-                except ValueError:
-                    raise ValueError(f"Invalid place hex value: {best_child_place_hex}")
+                            self.current_turn += 1
+                            return place_tuple
+                    except ValueError:
+                        raise ValueError(f"Invalid place hex value: {best_child_place_hex}")
+        # len(available_locs) < NUMBER (Min-Max)
         else:
             available_locs = [(row, col) for row, col in product(range(4), range(4)) if self.board[row][col]==0]
 
-            checkmate_position = tool.find_checkmate_place(self.board, selected_piece, available_locs)
-            if bool(checkmate_position):
-                self.get_place_and_log(checkmate_position[0])
-                self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
+            print("*** minmax place 수행.")
+            place, _ = tool.minimax(self.board, self.available_pieces, available_locs, selected_piece, type = 'place')
+
+            if place is not None:  # Minimax 결과가 유효한 경우
+                self.get_place_and_log(place)
+                self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))
                 self.current_turn += 1
-                return checkmate_position[0]
-
-            data = tool.find_three(self.board)
-
-            for index, (r, c) in enumerate(available_locs):
-                self.board[r][c] = self.pieces.index(selected_piece) + 1
-                if tool.check_win(self.board):
-                    for temp in data:
-                        if temp[1][0] == r and temp[1][1] == c:
-                            num = tool.find_piece_by_point(self.board, self.available_pieces)[index]
-
-                            if num % 2 == 0:
-                                self.get_place_and_log((r, c))
-                                self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
-                                self.current_turn += 1
-                                return (r, c)
-                            else:
-                                available_locs[index] = (None, None)
-
-                self.board[r][c] = 0
-
-            # N이 3개 있을 때 S를 받은 경우 S가 짝수개 있으면 N을 막는 위치
-            # N이 3개 있을 때 S를 받은 경우 S가 홀수개 있으면 N을 여는 위치
-            # print(available_locs)
-            
+                return place  
+                         
         random_place = random.choice([item for item in available_locs if None not in item])
         self.get_place_and_log(random_place)
 
-        # 이전 턴에서 P1이 놓은 기물 위치까지 기록된 로그에서 위치 로그만 뽑아서 튜플로 변환 
+        # 이전 턴에서 P2이 놓은 기물 위치까지 기록된 로그에서 위치 로그만 뽑아서 튜플로 변환 
         self.previous_place_log = list(map(place_hex_to_tuple, self.play_log))  # [start:end:stop]
         self.current_turn += 1
         return random_place
-        # 이후 minimax로 진행
+
+print("게임에 필요한 해시 테이블 로드 중입니다. 로드 완료 메시지가 나올 때까지 잠시 기다려주세요.")
+hash_table = load_global_hash_table(HASH_TABLE_PATH)
+print("헤시 테이블 로그가 완료되었습니다. 게임 시작!")

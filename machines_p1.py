@@ -232,10 +232,13 @@ class P1():
             piece, _ = tool.minimax(self.board, self.available_pieces, available_locs)
 
             if piece is None:
-                random_piece = random.choice(notcheckmatepiece)
-                self.get_piece_and_log(random_piece)
-                return random_piece
-
+                if bool(notcheckmatepiece):
+                    random_piece = random.choice(notcheckmatepiece)
+                else:
+                    random_piece = random.choice(self.available_pieces)
+                    self.get_piece_and_log(piece)
+                    return piece 
+            
             self.get_piece_and_log(piece)
             return piece 
         

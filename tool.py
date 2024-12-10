@@ -1,8 +1,9 @@
 import numpy as np
+import sys
 
 
 pieces = [(i, j, k, l) for i in range(2) for j in range(2) for k in range(2) for l in range(2)]  # All 16 pieces
-
+sys.setrecursionlimit(10 ** 6)
 
 def check_win(board):
     def check_line(line):
@@ -171,9 +172,11 @@ def disputelist(ls : list) -> list:
     
     return []
 
-def find_piece_by_point(board : list[list], availpiece : list) -> list[tuple]:
+def find_opponent(board : list[list], availpiece : list) -> list[tuple]:
 
     data = find_three(board)
+    if not data:
+        return []
     ans = list()
 
     for point in data:
@@ -194,28 +197,119 @@ def find_power_otherattr(point : tuple, availpiece):
     
     return answer
 
+def evaluate(board, availpiece, flag):
 
-# piece, (row, col)
+    if check_win(board):
+        return 1000 if flag == 1 else -1000
+    
+    ls = find_opponent(board, availpiece)
+    score = 0
 
-testboard = [[ 5,  0, 15,  0],
- [ 0,  8,  0,  0],
- [ 2,  0,  0,  0],
- [ 4, 14,  3,  7]]
+    for point in ls:
+        if point % 2 == 1:
+            score += (8 - point) * -10 if flag == 1 else (8 - point) * 10
+        else:
+            score += (8 - point) * 10 if flag == 1 else (8 - point) * -10
+    
+    return score
+
+def minimax(board, availpiece, availplace, select_piece = None, alpha = -9999, beta = 9999, flag = 1, type = 'piece', depth = 6) -> list:
+    #P1(flag == 1) win -> 1 else -1
+         
+    if depth == 0 or check_win(board):
+        return None, evaluate(board, availpiece, flag)
+    
+    if type == 'piece':
+        return explore_move_piece(board, availpiece, availplace, alpha, beta, flag, depth)
+    else:
+        return explore_move_place(board, availpiece, availplace, select_piece, alpha, beta, flag, depth)
+    
 
 
-[['0100', '0000', '1110', '0000'],
- ['0000', '0111', '0000', '0000'],
- ['0001', '0000', '0000', '0000'],
- ['0011', '1101', '0010', '0110']]
+def explore_move_piece(board, availpiece, availplace, alpha, beta, flag, depth):
+    value = -9999 if flag == 1 else 9999
+    ans = None
+    for piece in availpiece:
+        
+        temp_availpiece = list(filter(lambda x: x != piece, availpiece))
+        for row, col in availplace:
+            board[row][col] = pieces.index(piece) + 1
+            temp_availplace = list(filter(lambda x: x != (row, col), availplace))
 
+            _, score = minimax(
+                board,
+                temp_availpiece,
+                temp_availplace,
+                piece,
+                alpha,
+                beta,
+                flag = 3 - flag,
+                type = 'place',
+                depth = depth - 1
+            )
+            
+            board[row][col] = 0
+            
+            if flag == 1:
+                if value < score:
+                    ans = piece
+                    value = score
 
-availpiece = [
-    (0, 0, 0, 0),
-    (0, 1, 0, 1),
-    (1, 0, 0, 0),
-    (1, 0, 0, 1),
-    (1, 0, 1, 0),
-    (1, 0, 1, 1),
-    (1, 1, 0, 0),
-    (1, 1, 1, 1)
-]
+                alpha = max(alpha, value)
+
+            else:
+                if value > score:
+                    ans = piece
+                    value = score
+
+                beta = min(beta, value)
+
+            if beta <= alpha:
+                return ans, value
+    
+    return ans, value
+
+def explore_move_place(board, availpiece, availplace, piece, alpha, beta, flag, depth):
+    value = -9999 if flag == 1 else 9999
+    ans = None
+
+    temp_availpiece = list(filter(lambda x : x != piece, availpiece))
+
+    for row, col in availplace:
+        board[row][col] = pieces.index(piece) + 1
+        temp_availplace = list(filter(lambda x : x != (row, col), availplace))
+            
+        _, score = minimax(
+            board,
+            temp_availpiece,
+            temp_availplace,
+            None,
+            alpha,
+            beta,
+            flag = flag,
+            type = 'piece',
+            depth = depth - 1
+        )
+
+        board[row][col] = 0
+        
+        if flag == 1:   
+            if value < score:
+                ans = (row, col)
+                value = score
+
+            alpha = max(alpha, value)
+        
+        else:
+            if value > score:
+                ans = (row, col)
+                value = score
+            
+            beta = min(beta, value)
+
+        if beta <= alpha:
+            break
+        
+        return ans, value
+    
+    return ans, value
