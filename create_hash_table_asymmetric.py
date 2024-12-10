@@ -52,25 +52,8 @@ def handle_missing_values(df):
     df['Play Log'] = df['Play Log'].fillna("").astype(str)  # Play Log는 빈 문자열로 채움
     return df
 
-def update_hash_table(hash_table, sorted_parent_node, current_node, win_rate):
-    global append_count, skipped_count
-    if sorted_parent_node not in hash_table:
-        # 새로운 노드 추가
-        hash_table[sorted_parent_node] = {"bc": None, "bwr": -1, "wc": None, "wwr": 2}
-        append_count += 1
-    else:
-        skipped_count += 1
-    # 승률에 따라 업데이트
-    if win_rate > 0.55 and win_rate > hash_table[sorted_parent_node]["bwr"]:
-        hash_table[sorted_parent_node]["bc"] = current_node
-        hash_table[sorted_parent_node]["bwr"] = round(win_rate, 4)
-
-    if win_rate <= 0.45 and win_rate < hash_table[sorted_parent_node]["wwr"]:
-        hash_table[sorted_parent_node]["wc"] = current_node
-        hash_table[sorted_parent_node]["wwr"] = round(win_rate, 4)
-
 def create_hash_table_from_tree(input_csv, max_turns, batch_size):
-    global skipped_count
+    global append_count, skipped_count
     hash_table = {}
     batch_counter = 0
 
@@ -102,13 +85,23 @@ def create_hash_table_from_tree(input_csv, max_turns, batch_size):
         sorted_parent_node = sort_parent_node_by_piece(parent_node)
         sorted_opposite_node = convert_to_opposite_and_sort(sorted_parent_node)
         
-        if sorted_opposite_node in hash_table:
+        if sorted_parent_node not in hash_table and sorted_opposite_node not in hash_table:
+            # 새로운 노드 추가
+            hash_table[sorted_parent_node] = {"bc": None, "bwr": -1, "wc": None, "wwr": 2}
+            append_count += 1
+        else:
             skipped_count += 1
-            continue
-        
-        # 해시 테이블 업데이트
-        update_hash_table(hash_table, sorted_parent_node, current_node, win_rate)
-  
+
+        if sorted_parent_node in hash_table:
+            # 승률에 따라 업데이트
+            if win_rate > 0.55 and win_rate > hash_table[sorted_parent_node]["bwr"]:
+                hash_table[sorted_parent_node]["bc"] = current_node
+                hash_table[sorted_parent_node]["bwr"] = round(win_rate, 4)
+
+            if win_rate <= 0.45 and win_rate < hash_table[sorted_parent_node]["wwr"]:
+                hash_table[sorted_parent_node]["wc"] = current_node
+                hash_table[sorted_parent_node]["wwr"] = round(win_rate, 4)        
+            
         batch_counter += 1
 
         # 일정 개수마다 해시 테이블 저장 및 메모리 해제
